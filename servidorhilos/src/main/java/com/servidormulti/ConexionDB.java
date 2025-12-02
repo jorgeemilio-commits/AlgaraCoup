@@ -11,14 +11,14 @@ public class ConexionDB {
     
     private static final String URL = "jdbc:sqlite:server_database.db";
 
-    // Tabla de Usuarios SIMPLIFICADA (solo id, nombre, password)
+    // Tabla de Usuarios
     private final String sqlUsuarios = "CREATE TABLE IF NOT EXISTS usuarios (" +
                                      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                                      "nombre TEXT NOT NULL UNIQUE," +
                                      "password TEXT NOT NULL" +
                                      ");";
 
-    // Tabla de Grupos (Solo para el grupo 'Todos')
+    // Tabla de Grupos
     private final String sqlGrupos = "CREATE TABLE IF NOT EXISTS grupos (" +
                                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                                    "nombre TEXT NOT NULL UNIQUE" +
@@ -33,8 +33,6 @@ public class ConexionDB {
                                            "timestamp INTEGER NOT NULL," +
                                            "FOREIGN KEY(grupo_id) REFERENCES grupos(id)" +
                                            ");";
-
-    // NOTA: Se han ELIMINADO las variables String para sqlBloqueos, sqlPartidas, sqlGruposMiembros, sqlGruposEstadoUsuario y sqlMensajesPrivados.
 
     public Connection conectar() throws SQLException {
         return DriverManager.getConnection(URL);
@@ -54,15 +52,10 @@ public class ConexionDB {
     private void crearTablas(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             
-            // Creación de tablas esenciales
+            // Creación de tablas
             stmt.execute(sqlUsuarios);
-            // [SE ELIMINÓ: Bloqueos y Partidas]
             stmt.execute(sqlGrupos);
-            // [SE ELIMINÓ: Miembros de Grupo]
             stmt.execute(sqlGruposMensajes);
-            // [SE ELIMINÓ: Estado de Usuario y Mensajes Privados]
-
-            // [SE ELIMINÓ: Bloque de ALTER TABLE (compatibilidad)]
             
             System.out.println("Todas las tablas (usuarios, grupos y mensajes) verificadas o creadas.");
 
