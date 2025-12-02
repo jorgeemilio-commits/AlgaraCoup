@@ -8,80 +8,95 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public class ConexionDB {
-    
-    private static final String URL = "jdbc:sqlite:server_database.db";
 
-    // Tabla de Usuarios
-    private final String sqlUsuarios = "CREATE TABLE IF NOT EXISTS usuarios (" +
-                                     "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                     "nombre TEXT NOT NULL UNIQUE," +
-                                     "password TEXT NOT NULL" +
-                                     ");";
+    private static final String URL = "jdbc:sqlite:usuarios.db";
 
-    // Tabla de Grupos
-    private final String sqlGrupos = "CREATE TABLE IF NOT EXISTS grupos (" +
-                                   "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                   "nombre TEXT NOT NULL UNIQUE" +
-                                   ");";
-    
-    // Tabla de Mensajes de Grupo
-    private final String sqlGruposMensajes = "CREATE TABLE IF NOT EXISTS grupos_mensajes (" +
-                                           "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                                           "grupo_id INTEGER NOT NULL," +
-                                           "remitente_nombre TEXT NOT NULL," +
-                                           "contenido TEXT NOT NULL," +
-                                           "timestamp INTEGER NOT NULL," +
-                                           "FOREIGN KEY(grupo_id) REFERENCES grupos(id)" +
-                                           ");";
+    public static Connection conectar() {
+        Connection conn = null;
+        try {
+            Class.forName("org.sqlite.JDBC");
+            
+            org.sqlite.SQLiteConfig config = new org.sqlite.SQLiteConfig();
+            config.enforceForeignKeys(true);
+            
+            conn = DriverManager.getConnection(URL, config.toProperties());
+            
+            crearTablas(conn); 
+            inicializarDatosBase(conn); // Mantiene la creación del grupo "Todos"
 
-    public Connection conectar() throws SQLException {
-        return DriverManager.getConnection(URL);
-    }
-    
-    public void inicializarDB() {
-        try (Connection conn = conectar()) {
-            if (conn != null) {
-                crearTablas(conn);
-                inicializarDatosBase(conn);
-            }
+        } catch (ClassNotFoundException e) {
+            System.err.println("Error: Driver JDBC de SQLite no encontrado.");
+            e.printStackTrace();
         } catch (SQLException e) {
-            System.err.println("Error al inicializar la base de datos: " + e.getMessage());
+            System.err.println("Error al conectar o crear la base de datos: " + e.getMessage());
         }
+        return conn;
     }
 
-    private void crearTablas(Connection conn) throws SQLException {
+    private static void crearTablas(Connection conn) {
+        
+        // Tabla de Usuarios
+        String sqlUsuarios = "CREATE TABLE IF NOT EXISTS usuarios (" +
+                     "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                     "nombre TEXT NOT NULL UNIQUE," +
+                     "password TEXT NOT NULL" +
+                     ");";
+                     
+        // Tabla de Grupos 
+        String sqlGrupos = "CREATE TABLE IF NOT EXISTS grupos (" +
+                           "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                           "nombre TEXT NOT NULL UNIQUE" +
+                           ");";
+
+        // Tabla de Miembros 
+        String sqlGruposMiembros = "CREATE TABLE IF NOT EXISTS grupos_miembros (" +
+                                 "grupo_id INTEGER NOT NULL," +
+                                 "usuario_nombre TEXT NOT NULL," +
+                                 "PRIMARY KEY (grupo_id, usuario_nombre)," +
+                                 "FOREIGN KEY (grupo_id) REFERENCES grupos(id) ON DELETE CASCADE" +
+                                 ");";
+
         try (Statement stmt = conn.createStatement()) {
             
-            // Creación de tablas
             stmt.execute(sqlUsuarios);
             stmt.execute(sqlGrupos);
-            stmt.execute(sqlGruposMensajes);
+            stmt.execute(sqlGruposMiembros);
             
-            System.out.println("Todas las tablas (usuarios, grupos y mensajes) verificadas o creadas.");
-
+            System.out.println("Tablas (usuarios, grupos y miembros) verificadas o creadas.");
         } catch (SQLException e) {
             System.err.println("Error al crear las tablas: " + e.getMessage());
-            throw e; 
         }
     }
 
-    private void inicializarDatosBase(Connection conn) throws SQLException {
-        // Asegura que el grupo global "Todos" existe
-        String checkGroup = "SELECT id FROM grupos WHERE nombre = 'Todos'";
-        String insertGroup = "INSERT INTO grupos (nombre) VALUES ('Todos')";
+    /**
+     * Asegura que el grupo "Todos" exista.
+     */
+    private static void inicializarDatosBase(Connection conn) {
+        String sqlCheck = "SELECT COUNT(*) FROM grupos WHERE nombre = ?";
+        String sqlInsert = "INSERT INTO grupos (nombre) VALUES (?)";
 
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(checkGroup)) {
-
-            if (!rs.next()) {
-                // Si no existe, lo inserta
-                try (PreparedStatement pstmt = conn.prepareStatement(insertGroup)) {
-                    pstmt.executeUpdate();
-                    System.out.println("Grupo base 'Todos' creado.");
+        try (PreparedStatement checkStmt = conn.prepareStatement(sqlCheck)) {
+            checkStmt.setString(1, "Todos");
+            ResultSet rs = checkStmt.executeQuery();
+            if (rs.next() && rs.getInt(1) == 0) {
+                try (PreparedStatement insertStmt = conn.prepareStatement(sqlInsert)) {
+                    insertStmt.setString(1, "Todos");
+                    insertStmt.executeUpdate();
+                    System.out.println("Grupo 'Todos' inicializado en la base de datos.");
                 }
-            } else {
-                // System.out.println("Grupo base 'Todos' ya existe.");
             }
+        } catch (SQLException e) {
+            System.err.println("Error al inicializar datos base (Grupo 'Todos'): " + e.getMessage());
+        }
+    }
+
+    public static void cerrarConexion(Connection conn) {
+        try {
+            if (conn != null) {
+                conn.close();
+            }
+        } catch (SQLException ex) {
+            System.err.println("Error al cerrar la conexión: " + ex.getMessage());
         }
     }
 }
