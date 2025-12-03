@@ -11,7 +11,6 @@ import java.net.Socket;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-// Se eliminan referencias a JuegoGato y ManejadorSincronizacion
 public class UnCliente implements Runnable {
     
     final DataOutputStream salida;
@@ -21,33 +20,24 @@ public class UnCliente implements Runnable {
     private final ManejadorMensajes manejadorMensajes;
     private final EnrutadorComandos enrutadorComandos; 
     
-    // Constante para el límite ---
     private static final int LIMITE_MENSAJES_INVITADO = 3;
     
-    // estado del cliente
     private String nombreUsuario; 
     private int mensajesEnviados = 0;
     private boolean logueado = false;
 
-    // Campos de Juego (Mantenidos como placeholders genéricos para Coup)
     private volatile String oponentePendiente = null;
-    // Se usa Object como valor para ser genérico para futuros objetos de juego (Ej: JuegoCoup)
     private final ConcurrentHashMap<String, Object> juegosActivos = new ConcurrentHashMap<>();
     
-    // Flujos para comunicación en UTF-8
     private final PrintWriter salidaUTF;
     private final BufferedReader entradaUTF;
     
-    /**
-     * Recibe el contexto con todos los servicios.
-     */
     UnCliente(Socket s, String id, ContextoServidor contexto) throws java.io.IOException {
         this.salidaUTF = new PrintWriter(new OutputStreamWriter(s.getOutputStream(), "UTF-8"), true);
         this.entradaUTF = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
         this.clienteID = id;
         this.nombreUsuario = "Invitado-" + id;
 
-        // Mantener los flujos originales para compatibilidad
         this.salida = new DataOutputStream(s.getOutputStream());
         this.entrada = new DataInputStream(s.getInputStream());
 
@@ -55,13 +45,10 @@ public class UnCliente implements Runnable {
         this.enrutadorComandos = contexto.getEnrutadorComandos();
     }
 
-    // --- GETTERS & SETTERS  ---
     public String getNombreUsuario() { return nombreUsuario; }
     public int getMensajesEnviados() { return mensajesEnviados; }
     public void incrementarMensajesEnviados() { this.mensajesEnviados++; }
     public boolean estaLogueado() { return logueado; }
-    
-    // Métodos de juego simplificados (placeholders)
     public synchronized String getOponentePendiente() { return oponentePendiente; }
     public synchronized void setOponentePendiente(String nombre) { this.oponentePendiente = nombre; }
     public synchronized Object getJuegoConID(String juegoID) { return juegosActivos.get(juegoID); }
@@ -74,6 +61,10 @@ public class UnCliente implements Runnable {
     
     /**
      * Aplica el estado de login y une al usuario al grupo 'Todos'.
+     * @param nombre El nombre de usuario.
+     * @param password La contraseña.
+     * @return true si el login interno fue exitoso.
+     * @throws IOException 
      */
     public boolean manejarLoginInterno(String nombre, String password) throws IOException {
         
@@ -81,10 +72,8 @@ public class UnCliente implements Runnable {
             this.nombreUsuario = nombre; 
             this.logueado = true;
             
-            // Mantiene la lógica de unirse a "Todos" (se necesita el grupoDB).
+            // Esta línea ahora debería funcionar si GrupoDB.unirseGrupo existe.
             new GrupoDB().unirseGrupo("Todos", nombre); 
-            
-            // [ELIMINADO: Lógica de sincronización de mensajes pendientes]
             
             return true;
 
@@ -101,14 +90,9 @@ public class UnCliente implements Runnable {
             this.logueado = false;
             this.nombreUsuario = "Invitado-" + this.clienteID; 
             this.mensajesEnviados = 0;
-            
-            // [ELIMINADO: Lógica de terminar juegos al hacer logout]
         }
     }
     
-    /**
-     * MÉTODO RUN() SIMPLIFICADO Y CON LÓGICA DE LÍMITE
-     */
     @Override
     public void run() {
         try {
@@ -128,23 +112,20 @@ public class UnCliente implements Runnable {
 
                 if (mensaje.startsWith("/")) {
                     
-                    // --- Lógica de límite para COMANDOS ---
                     if (!this.logueado) {
                         String comando = mensaje.trim().split(" ", 2)[0].toLowerCase();
 
-                        // Comandos permitidos que NO cuentan para el límite
                         boolean esComandoExcluido = comando.equals("/login") || 
                                                     comando.equals("/registrar") ||
                                                     comando.equals("/ayuda") ||
                                                     comando.equals("/conectados");
 
                         if (!esComandoExcluido) {
-                            // Es un comando restringido (ej. /jugar, /logout)
                             if (this.mensajesEnviados >= LIMITE_MENSAJES_INVITADO) {
                                 this.salida.writeUTF("Límite de acciones alcanzado. Por favor, inicia sesión para continuar con /login o /register.");
                                 continue;
                             }
-                            this.incrementarMensajesEnviados(); // Cuenta como una acción
+                            this.incrementarMensajesEnviados();
                         }
                     }
                     
@@ -152,23 +133,19 @@ public class UnCliente implements Runnable {
 
                 } else {
                     
-                    // --- Lógica de límite para MENSAJES ---
                     if (!this.logueado) {
                         if (this.mensajesEnviados >= LIMITE_MENSAJES_INVITADO) {
                             this.salida.writeUTF("Límite de mensajes alcanzado. Por favor, inicia sesión.");
                             continue;
                         }
-                        this.incrementarMensajesEnviados(); // Cuenta como un mensaje
+                        this.incrementarMensajesEnviados();
                     }
                     
                     manejadorMensajes.enrutarMensaje(this, mensaje);
                 }
                 
             } catch (Exception ex) {
-                // --- Manejo de desconexion  ---
                 System.out.println("Cliente " + this.nombreUsuario + " se ha desconectado.");
-                
-                // [ELIMINADO: Lógica de terminar juegos al desconectar]
                 
                 ServidorMulti.clientes.remove(this.clienteID); 
                 try {
