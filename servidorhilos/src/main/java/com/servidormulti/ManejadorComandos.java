@@ -3,32 +3,26 @@ package com.servidormulti;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map; 
+// Se elimina la dependencia de ManejadorAccionesGrupo, ManejadorRangos, ManejadorWinrate, BloqueoDB, MensajeDB
 
 public class ManejadorComandos {
     
     // --- MANEJADORES DELEGADOS ---
-    private final ManejadorRangos manejadorRangos;
-    private final ManejadorWinrate manejadorWinrate;
-    private final ManejadorAccionesGrupo manejadorAccionesGrupo;
+    // [ELIMINADO: ManejadorRangos, ManejadorWinrate, ManejadorAccionesGrupo]
 
     // --- OBJETOS DB ---
-    private final BloqueoDB bloqueoDB;
-    private final MensajeDB mensajeDB;
+    private final GrupoDB grupoDB; // Mantenido para futura gestión de partidas
+    // [ELIMINADO: BloqueoDB, MensajeDB]
 
     private final Map<String, UnCliente> clientesConectados;
 
-    public ManejadorComandos(ManejadorRangos mr, ManejadorWinrate mw, ManejadorAccionesGrupo mag, BloqueoDB bdb, MensajeDB mdb, Map<String, UnCliente> clientes) {
-        this.manejadorRangos = mr;
-        this.manejadorWinrate = mw;
-        this.manejadorAccionesGrupo = mag;
-        this.bloqueoDB = bdb;
-        this.mensajeDB = mdb;
+    public ManejadorComandos(GrupoDB grupoDB, Map<String, UnCliente> clientes) {
+        // [ELIMINADO: mr, mw, mag, bdb, mdb]
+        this.grupoDB = grupoDB;
         this.clientesConectados = clientes; 
     }
     
-    private boolean existeUsuarioDB(String nombre) {
-        return this.mensajeDB.existeUsuario(nombre);
-    }
+    // [ELIMINADO: existeUsuarioDB, ya que dependía de MensajeDB]
 
     public void manejarLogout(DataOutputStream salida, UnCliente cliente) throws IOException {
         if (!cliente.estaLogueado()) {
@@ -39,70 +33,11 @@ public class ManejadorComandos {
         salida.writeUTF("Has cerrado sesión. Tu nombre es ahora '" + cliente.getNombreUsuario() + "'.");
     }
 
-    public void manejarBloqueo(String comando, DataOutputStream salida, UnCliente cliente) throws IOException {
-        if (!cliente.estaLogueado()) {
-            salida.writeUTF("Debes iniciar sesión para bloquear usuarios.");
-            return;
-        }
-        
-        String[] partes = comando.trim().split(" ");
-        if (partes.length != 2) {
-            salida.writeUTF("Uso: /block nombre_usuario");
-            return;
-        }
-
-        String aBloquear = partes[1];
-        String miNombre = cliente.getNombreUsuario();
-        
-        if (aBloquear.equalsIgnoreCase(miNombre)) {
-            salida.writeUTF("No puedes bloquearte a ti mismo.");
-            return;
-        }
-
-        if (!existeUsuarioDB(aBloquear)) {
-            salida.writeUTF("Error: El usuario '" + aBloquear + "' no existe en el sistema.");
-            return;
-        }
-
-        String resultado = bloqueoDB.bloquearUsuario(miNombre, aBloquear);
-        salida.writeUTF(resultado);
-    }
-
-    public void manejarDesbloqueo(String comando, DataOutputStream salida, UnCliente cliente) throws IOException {
-        if (!cliente.estaLogueado()) {
-            salida.writeUTF("Debes iniciar sesión para desbloquear usuarios.");
-            return;
-        }
-
-        String[] partes = comando.trim().split(" ");
-        if (partes.length != 2) {
-            salida.writeUTF("Uso: /unblock nombre_usuario");
-            return;
-        }
-
-        String aDesbloquear = partes[1];
-        String miNombre = cliente.getNombreUsuario();
-
-        if (aDesbloquear.equalsIgnoreCase(miNombre)) {
-            salida.writeUTF("No puedes desbloquearte a ti mismo.");
-            return;
-        }
-        
-        String resultado = bloqueoDB.desbloquearUsuario(miNombre, aDesbloquear);
-        salida.writeUTF(resultado);
-    }
+    // [ELIMINADO: manejarBloqueo]
+    // [ELIMINADO: manejarDesbloqueo]
+    // [ELIMINADO: manejarRangos]
+    // [ELIMINADO: manejarWinrate]
     
-    
-    // --- (Rangos/Winrate) ---
-
-    public void manejarRangos(DataOutputStream salida) throws IOException {
-        manejadorRangos.ejecutar(salida);
-    }
-
-    public void manejarWinrate(String comando, DataOutputStream salida, UnCliente cliente) throws IOException {
-        manejadorWinrate.ejecutar(comando, salida, cliente);
-    }
-
     // -- Conectados --
     public void manejarConectados(DataOutputStream salida) throws IOException {
         // Mostrar usuarios conectados, incluyendo invitados
@@ -111,7 +46,7 @@ public class ManejadorComandos {
         for (UnCliente cliente : clientesConectados.values()) {
             lista.append("- ").append(cliente.getNombreUsuario());
             if (!cliente.estaLogueado()) {
-                lista.append(" ");
+                lista.append(" (Invitado)"); // Cambiado el formato
             }
             lista.append("\n");
             contador++;
@@ -125,22 +60,25 @@ public class ManejadorComandos {
         }
     }
 
-    // ---  (Grupos) ---
+    // ---  (Grupos - Solo se mantienen los comandos básicos de la interfaz para el futuro) ---
+    // NOTA: Estos métodos ahora están vacíos, ya que la lógica de grupo estaba en ManejadorAccionesGrupo, que fue eliminado.
+    // Solo sirven como placeholders para el EnrutadorComandos.
     
     public void manejarCrearGrupo(String[] partes, DataOutputStream salida, UnCliente cliente) throws IOException {
-        manejadorAccionesGrupo.crearGrupo(partes, salida, cliente);
+        salida.writeUTF("Comando temporalmente desactivado para simplificación.");
     }
     
     public void manejarBorrarGrupo(String[] partes, DataOutputStream salida, UnCliente cliente) throws IOException {
-        manejadorAccionesGrupo.borrarGrupo(partes, salida, cliente);
+        salida.writeUTF("Comando temporalmente desactivado para simplificación.");
     }
     
     public void manejarUnirseGrupo(String[] partes, DataOutputStream salida, UnCliente cliente) throws IOException {
-        manejadorAccionesGrupo.unirseGrupo(partes, salida, cliente);
+        // Lógica de unirse a "Todos" se mueve a UnCliente.manejarLoginInterno
+        salida.writeUTF("Comando temporalmente desactivado para simplificación.");
     }
 
     public void manejarSalirGrupo(String[] partes, DataOutputStream salida, UnCliente cliente) throws IOException {
-        manejadorAccionesGrupo.salirGrupo(partes, salida, cliente);
+        salida.writeUTF("Comando temporalmente desactivado para simplificación.");
     }
 
     public void manejarAyuda(DataOutputStream salida, UnCliente cliente) throws IOException {
@@ -155,28 +93,18 @@ public class ManejadorComandos {
         ayuda.append("  /registrar     - Crea una nueva cuenta.\n");
         ayuda.append("  /logout        - Cierra tu sesión actual.\n");
 
-        // Comandos Sociales y de Grupos
-        ayuda.append("--- Grupos y Social ---\n");
-        ayuda.append("  /creargrupo <nombre>   - Crea un nuevo grupo.\n");
-        ayuda.append("  /borrargrupo <nombre>  - Borra un grupo, no puedes borrar TODOS.\n");
-        ayuda.append("  /unirsegrupo <nombre>  - Te une a un grupo existente.\n");
-        ayuda.append("  /salirgrupo <nombre>   - Te saca de un grupo.\n");
-        ayuda.append("  /block <usuario>       - Bloquea a un usuario (mensajes y juegos).\n");
-        ayuda.append("  /unblock <usuario>     - Desbloquea a un usuario.\n");
-
-        // Comandos de Estadísticas y Retos
-        ayuda.append("--- Estadísticas y Juegos ---\n");
+        // Comandos Sociales y de Grupos (Mantenidos como referencia futura)
+        ayuda.append("--- Grupos (Futuro Coup) ---\n");
         ayuda.append("  /conectados    - Muestra la lista de usuarios conectados.\n");
-        ayuda.append("  /rangos        - Muestra el ranking de jugadores.\n");
-        ayuda.append("  /winrate <oponente> - Muestra tu H2H contra un oponente.\n");
-        ayuda.append("  /jugar <oponente>     - Reta a un jugador a una partida de Gato.\n");
-        ayuda.append("  /aceptar <retador>    - Si te enviaron una invitacion de juego la acepta.\n");
+        // Los comandos de grupo y juego se mantienen como marcadores de posición:
+        ayuda.append("  /jugar <oponente>     - Reta a un jugador (a ser implementado para Coup).\n");
+        ayuda.append("  /aceptar <retador>    - Acepta una invitación (a ser implementado para Coup).\n");
         
         // Comandos Contextuales (Solo si está en juego)
         if (cliente.estaEnJuego()) {
             ayuda.append("--- Comandos de Partida (Activos) ---\n");
-            ayuda.append("  /jugada <ID_Juego> <fila>,<col> - Realiza un movimiento (Ej: /jugada 12 1,1).\n");
-            ayuda.append("  /salirjuego <ID_Juego>        - Si estas en una partida, abandona la partida en curso.\n");
+            ayuda.append("  /accion <ID> ... - Realiza una acción de Coup.\n");
+            ayuda.append("  /salirjuego <ID> - Abandona la partida en curso.\n");
         }
 
         salida.writeUTF(ayuda.toString());

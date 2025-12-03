@@ -4,122 +4,82 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-/**
- * Reemplaza el bloque if/else de UnCliente.run().
- * Recibe un comando y lo delega al servicio correspondiente.
- */
 public class EnrutadorComandos {
-
+    
     private final ManejadorComandos manejadorComandos;
-    private final ManejadorJuegos manejadorJuegos;
+    // [ELIMINADO: private final ManejadorJuegos manejadorJuegos;]
     private final ManejadorAutenticacion manejadorAutenticacion;
 
-    public EnrutadorComandos(ManejadorComandos mc, ManejadorJuegos mj, ManejadorAutenticacion ma) {
-        this.manejadorComandos = mc;
-        this.manejadorJuegos = mj;
-        this.manejadorAutenticacion = ma;
+    public EnrutadorComandos(ManejadorComandos manejadorComandos, ManejadorAutenticacion manejadorAutenticacion) { 
+        this.manejadorComandos = manejadorComandos;
+        // [ELIMINADO: this.manejadorJuegos = manejadorJuegos;]
+        this.manejadorAutenticacion = manejadorAutenticacion;
     }
 
     /**
-     * Procesa un mensaje que ya se sabe que es un comando (inicia con "/").
+     * Procesa el comando enviado por el cliente.
      */
-    
-    public void procesar(UnCliente cliente, String mensaje, DataInputStream entrada, DataOutputStream salida) throws IOException {
+    public void procesar(String mensaje, DataInputStream entrada, DataOutputStream salida, UnCliente cliente) throws IOException {
         
         String[] partes = mensaje.trim().split(" ", 3);
         String comando = partes[0].toLowerCase();
-
-        // --- Comandos de Juego (ID-based) ---
-
-        if (comando.equals("/jugada") && partes.length == 3) {
-            JuegoGato juego = cliente.getJuegoConID(partes[1]);
-            if (juego != null) juego.manejarJugada(cliente, partes[2]);
-            else salida.writeUTF("Partida no encontrada.");
-            return;
-        }
-        if (comando.equals("/salirjuego") && partes.length == 2) {
-            JuegoGato juego = cliente.getJuegoConID(partes[1]);
-            if (juego != null) juego.terminarJuego(cliente, "Has abandonado la partida.");
-            else salida.writeUTF("Partida no encontrada.");
-            return;
-        }
         
-        
+        // --- 1. COMANDOS DE AUTENTICACIÓN (Pueden ser usados por Invitados) ---
         if (comando.equals("/registrar")) {
-
-            if (cliente.estaLogueado()) {
-                salida.writeUTF("Error: Ya has iniciado sesión. Debes usar /logout primero.");
-                return;
-            }
-
             manejadorAutenticacion.manejarRegistro(entrada, salida, cliente);
             return;
         }
         if (comando.equals("/login")) {
-
-            if (cliente.estaLogueado()) {
-                salida.writeUTF("Error: Ya has iniciado sesión como '" + cliente.getNombreUsuario() + "'.");
-                return;
-            }
-
             manejadorAutenticacion.manejarLogin(entrada, salida, cliente);
             return;
         }
+
+        // Si el cliente no está logueado y el comando no es login/registrar, se le niega el acceso, 
+        // a menos que sea un comando global como /ayuda o /conectados.
         
-        // --- Comandos de Usuario/Bloqueo (Delega a ManejadorComandos) ---
+        // Si no está logueado (es invitado) y trata de usar cualquier otro comando, le negamos la mayoría.
+        // Mantenemos /ayuda y /conectados disponibles.
+        if (!cliente.estaLogueado() && 
+            !comando.equals("/ayuda") && 
+            !comando.equals("/conectados")) {
+            
+            salida.writeUTF("Error: Debes iniciar sesión (/login) o registrarte (/registrar) para usar este comando.");
+            return;
+        }
+
+        // --- 2. COMANDOS DE JUEGO (Placeholder para Coup) ---
+        // Estos comandos requieren que el usuario esté logueado, lo cual se verifica arriba.
+
+        // Comando futuro para acciones de Coup
+        if (comando.equals("/accion")) { 
+            salida.writeUTF("Comando '/accion' reservado para la lógica de juego de Coup.");
+            return;
+        }
+        
+        // Comando futuro para salir del juego
+        if (comando.equals("/salirjuego")) { 
+            salida.writeUTF("Comando '/salirjuego' reservado para la lógica de juego de Coup.");
+            return;
+        }
+
+        // Comando para iniciar una partida
+        if (comando.equals("/jugar")) {
+            salida.writeUTF("Comando '/jugar' reservado para retar a un oponente en Coup.");
+            return;
+        }
+        
+        // Comando para aceptar una partida
+        if (comando.equals("/aceptar")) {
+            salida.writeUTF("Comando '/aceptar' reservado para aceptar un reto en Coup.");
+            return;
+        }
+        
+        // --- 3. COMANDOS DE USUARIO Y GENERALES (Delegados a ManejadorComandos) ---
         if (comando.equals("/logout")) {
             manejadorComandos.manejarLogout(salida, cliente);
             return;
         }
-        if (comando.equals("/block")) {
-            manejadorComandos.manejarBloqueo(mensaje, salida, cliente);
-            return;
-        }
-        if (comando.equals("/unblock")) {
-            manejadorComandos.manejarDesbloqueo(mensaje, salida, cliente);
-            return;
-        }
-
-        // --- Comandos de Ranking (Delega a ManejadorComandos) ---
-        if (comando.equals("/rangos")) {
-            manejadorComandos.manejarRangos(salida);
-            return;
-        }
-        if (comando.equals("/winrate")) {
-            manejadorComandos.manejarWinrate(mensaje, salida, cliente);
-            return;
-        }
         
-        // --- Comandos de Grupo (Delega a ManejadorComandos) ---
-        if (comando.equals("/creargrupo")) {
-            manejadorComandos.manejarCrearGrupo(partes, salida, cliente);
-            return;
-        }
-        if (comando.equals("/borrargrupo")) {
-            manejadorComandos.manejarBorrarGrupo(partes, salida, cliente);
-            return;
-        }
-        if (comando.equals("/unirsegrupo")) {
-            manejadorComandos.manejarUnirseGrupo(partes, salida, cliente);
-            return;
-        }
-
-        if (comando.equals("/salirgrupo")) { 
-            manejadorComandos.manejarSalirGrupo(partes, salida, cliente);
-            return;
-        }
-
-        // --- Comandos de Invitación a Juego (Delega a ManejadorJuegos) ---
-        if (comando.equals("/jugar") && partes.length == 2) { 
-            manejadorJuegos.manejarJugar(mensaje, salida, cliente);
-            return;
-        }
-        if (comando.equals("/aceptar") && partes.length == 2) {
-            manejadorJuegos.manejarAceptar(mensaje, salida, cliente);
-            return;
-        }
-        
-        // --- Comando de Conectados (Delega a ManejadorComandos) ---
         if (comando.equals("/conectados")) {
             manejadorComandos.manejarConectados(salida);
             return;
@@ -130,7 +90,9 @@ public class EnrutadorComandos {
             return;
         }
 
-        // Comando desconocido
-        salida.writeUTF("Comando '" + comando + "' no reconocido.");
+        // [ELIMINADO: /block, /unblock, /rangos, /winrate, /creargrupo, /borrargrupo, /unirsegrupo, /salirgrupo]
+        
+        // --- 4. COMANDO DESCONOCIDO ---
+        salida.writeUTF("Comando '" + comando + "' no reconocido. Usa /ayuda para ver la lista de comandos.");
     }
 }

@@ -2,6 +2,8 @@ package com.servidormulti;
 
 import java.util.Map;
 
+// Se eliminan las referencias a ManejadorRangos, ManejadorJuegos, ManejadorAutenticacion, ManejadorSincronizacion, ManejadorAccionesGrupo, BloqueoDB, MensajeDB
+
 public class ContextoServidor {
 
     // --- CAMPOS PRIVADOS ---
@@ -10,56 +12,35 @@ public class ContextoServidor {
 
     // Instancias Únicas de Servicios (Singleton)
     private final GrupoDB grupoDB;
-    private final MensajeDB mensajeDB;
-    private final BloqueoDB bloqueoDB;
+    // [ELIMINADO: MensajeDB, BloqueoDB, ManejadorJuegos, ManejadorSincronizacion, ManejadorAccionesGrupo, ManejadorRangos, ManejadorWinrate]
     
     private final ManejadorComandos manejadorComandos;
-    private final ManejadorJuegos manejadorJuegos;
     private final ManejadorAutenticacion manejadorAutenticacion;
-    private final ManejadorSincronizacion manejadorSincronizacion;
     private final ManejadorMensajes manejadorMensajes;
     private final EnrutadorComandos enrutadorComandos;
 
     public ContextoServidor(Map<String, UnCliente> clientesConectados) {
-        // Ahora esta línea es válida
         this.clientesConectados = clientesConectados; 
 
         // 1. Inicializar objetos DB
         this.grupoDB = new GrupoDB();
-        this.mensajeDB = new MensajeDB();
-        this.bloqueoDB = new BloqueoDB();
 
-        // 2. Inicializar manejadores de acciones
-        ManejadorRangos manejadorRangos = new ManejadorRangos();
-        ManejadorWinrate manejadorWinrate = new ManejadorWinrate();
-        
-        // 3. Crear el sincronizador
-        this.manejadorSincronizacion = new ManejadorSincronizacion(mensajeDB);
-
-        // 4. Crear el manejador de acciones de grupo 
-        ManejadorAccionesGrupo manejadorAccionesGrupo = new ManejadorAccionesGrupo(grupoDB, mensajeDB, this.manejadorSincronizacion);
-
-        // 5. Inicializar manejadores principales
-        
-        // Ahora le pasamos la lista de clientes al ManejadorComandos
+        // 2. Inicializar manejadores principales
         this.manejadorComandos = new ManejadorComandos(
-            manejadorRangos, 
-            manejadorWinrate, 
-            manejadorAccionesGrupo, 
-            bloqueoDB, 
-            mensajeDB,
+            this.grupoDB, 
             clientesConectados 
         );
        
-
-        this.manejadorJuegos = new ManejadorJuegos(clientesConectados, bloqueoDB); // (Modificado en el paso anterior)
-        this.manejadorAutenticacion = new ManejadorAutenticacion(clientesConectados); // (Modificado en el paso anterior)
-        this.manejadorMensajes = new ManejadorMensajes(clientesConectados, grupoDB, mensajeDB, bloqueoDB);
+        this.manejadorAutenticacion = new ManejadorAutenticacion(clientesConectados); 
+    
+        this.manejadorMensajes = new ManejadorMensajes(
+            clientesConectados, 
+            this.grupoDB
+        );
         
-        // 6. Inicializar el nuevo enrutador
+        // 3. Inicializar el enrutador
         this.enrutadorComandos = new EnrutadorComandos(
             this.manejadorComandos, 
-            this.manejadorJuegos, 
             this.manejadorAutenticacion
         );
     }
@@ -67,6 +48,6 @@ public class ContextoServidor {
     // --- Getters ---
 
     public ManejadorMensajes getManejadorMensajes() { return manejadorMensajes; }
-    public ManejadorSincronizacion getManejadorSincronizacion() { return manejadorSincronizacion; }
+    // [ELIMINADO: getManejadorSincronizacion]
     public EnrutadorComandos getEnrutadorComandos() { return enrutadorComandos; }
 }

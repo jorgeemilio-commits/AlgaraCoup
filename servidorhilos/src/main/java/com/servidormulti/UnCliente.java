@@ -8,8 +8,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+// Se eliminan referencias a JuegoGato y ManejadorSincronizacion
 public class UnCliente implements Runnable {
     
     final DataOutputStream salida;
@@ -17,7 +19,6 @@ public class UnCliente implements Runnable {
     final String clienteID; 
     
     private final ManejadorMensajes manejadorMensajes;
-    private final ManejadorSincronizacion manejadorSincronizacion;
     private final EnrutadorComandos enrutadorComandos; 
     
     // Constante para el límite ---
@@ -28,9 +29,10 @@ public class UnCliente implements Runnable {
     private int mensajesEnviados = 0;
     private boolean logueado = false;
 
-    // Campos de Juego
+    // Campos de Juego (Mantenidos como placeholders genéricos para Coup)
     private volatile String oponentePendiente = null;
-    private final ConcurrentHashMap<String, JuegoGato> juegosActivos = new ConcurrentHashMap<>();
+    // Se usa Object como valor para ser genérico para futuros objetos de juego (Ej: JuegoCoup)
+    private final ConcurrentHashMap<String, Object> juegosActivos = new ConcurrentHashMap<>();
     
     // Flujos para comunicación en UTF-8
     private final PrintWriter salidaUTF;
@@ -50,7 +52,6 @@ public class UnCliente implements Runnable {
         this.entrada = new DataInputStream(s.getInputStream());
 
         this.manejadorMensajes = contexto.getManejadorMensajes();
-        this.manejadorSincronizacion = contexto.getManejadorSincronizacion();
         this.enrutadorComandos = contexto.getEnrutadorComandos();
     }
 
@@ -59,17 +60,20 @@ public class UnCliente implements Runnable {
     public int getMensajesEnviados() { return mensajesEnviados; }
     public void incrementarMensajesEnviados() { this.mensajesEnviados++; }
     public boolean estaLogueado() { return logueado; }
+    
+    // Métodos de juego simplificados (placeholders)
     public synchronized String getOponentePendiente() { return oponentePendiente; }
     public synchronized void setOponentePendiente(String nombre) { this.oponentePendiente = nombre; }
-    public synchronized JuegoGato getJuegoConID(String juegoID) { return juegosActivos.get(juegoID); }
-    public synchronized void agregarJuego(String juegoID, JuegoGato juego) { juegosActivos.put(juegoID, juego); }
+    public synchronized Object getJuegoConID(String juegoID) { return juegosActivos.get(juegoID); }
+    public synchronized void agregarJuego(String juegoID, Object juego) { juegosActivos.put(juegoID, juego); }
     public synchronized void removerJuego(String juegoID) { juegosActivos.remove(juegoID); }
     public synchronized boolean estaEnJuego() { return !this.juegosActivos.isEmpty(); }
-    public synchronized ConcurrentHashMap<String, JuegoGato> getJuegosActivos() { return juegosActivos; }
+    @SuppressWarnings("unchecked")
+    public synchronized ConcurrentHashMap<String, Object> getJuegosActivos() { return (ConcurrentHashMap<String, Object>) juegosActivos; }
     
     
     /**
-     * Aplica el estado de login y sincroniza mensajes.
+     * Aplica el estado de login y une al usuario al grupo 'Todos'.
      */
     public boolean manejarLoginInterno(String nombre, String password) throws IOException {
         
@@ -77,9 +81,10 @@ public class UnCliente implements Runnable {
             this.nombreUsuario = nombre; 
             this.logueado = true;
             
+            // Mantiene la lógica de unirse a "Todos" (se necesita el grupoDB).
             new GrupoDB().unirseGrupo("Todos", nombre); 
             
-            this.manejadorSincronizacion.sincronizarMensajesPendientes(this);
+            // [ELIMINADO: Lógica de sincronización de mensajes pendientes]
             
             return true;
 
@@ -97,9 +102,7 @@ public class UnCliente implements Runnable {
             this.nombreUsuario = "Invitado-" + this.clienteID; 
             this.mensajesEnviados = 0;
             
-            juegosActivos.values().forEach(juego -> {
-                juego.terminarJuego(this, "El oponente '" + this.getNombreUsuario() + "' ha cerrado sesión.");
-            });
+            // [ELIMINADO: Lógica de terminar juegos al hacer logout]
         }
     }
     
@@ -112,8 +115,7 @@ public class UnCliente implements Runnable {
             this.salida.writeUTF("Bienvenido. Tu nombre actual es: " + this.nombreUsuario + "\n" +
                                  "--- Comandos Básicos ---\n" +
                                  "  Mensaje a 'Todos': Hola a todos\n" +
-                                 "  Mensaje a Grupo:   #NombreGrupo Hola grupo\n" +
-                                 "  Mensaje Privado:   @Usuario Hola\n" +
+                                 "  Mensaje a Grupo:   #NombreGrupo Hola grupo (Solo logueado)\n" +
                                  "  /login             - Inicia sesión\n" +
                                  "  /registrar         - Crea una nueva cuenta\n" +
                                  "--- Para más comandos, escribe: /ayuda ---");
@@ -133,19 +135,20 @@ public class UnCliente implements Runnable {
                         // Comandos permitidos que NO cuentan para el límite
                         boolean esComandoExcluido = comando.equals("/login") || 
                                                     comando.equals("/registrar") ||
-                                                    comando.equals("/ayuda"); // Ayuda tampoco debe contar
+                                                    comando.equals("/ayuda") ||
+                                                    comando.equals("/conectados");
 
                         if (!esComandoExcluido) {
-                            // Es un comando restringido (ej. /block, /jugar, /creargrupo)
+                            // Es un comando restringido (ej. /jugar, /logout)
                             if (this.mensajesEnviados >= LIMITE_MENSAJES_INVITADO) {
                                 this.salida.writeUTF("Límite de acciones alcanzado. Por favor, inicia sesión para continuar con /login o /register.");
                                 continue;
                             }
-                            this.incrementarMensajesEnviados(); // Cuenta como un mensaje
+                            this.incrementarMensajesEnviados(); // Cuenta como una acción
                         }
                     }
                     
-                    enrutadorComandos.procesar(this, mensaje, entrada, salida);
+                    enrutadorComandos.procesar(mensaje, entrada, salida, this);
 
                 } else {
                     
@@ -165,9 +168,7 @@ public class UnCliente implements Runnable {
                 // --- Manejo de desconexion  ---
                 System.out.println("Cliente " + this.nombreUsuario + " se ha desconectado.");
                 
-                juegosActivos.values().forEach(juego -> {
-                    juego.terminarJuego(this, "El oponente '" + this.getNombreUsuario() + "' se ha desconectado.");
-                });
+                // [ELIMINADO: Lógica de terminar juegos al desconectar]
                 
                 ServidorMulti.clientes.remove(this.clienteID); 
                 try {
